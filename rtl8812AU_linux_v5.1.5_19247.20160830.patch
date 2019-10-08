@@ -1,0 +1,318 @@
+diff -Npru old/rtl8812AU_linux_v5.1.5_19247.20160830/hal/phydm/phydm_types.h new/rtl8812AU_linux_v5.1.5_19247.20160830/hal/phydm/phydm_types.h
+--- old/rtl8812AU_linux_v5.1.5_19247.20160830/hal/phydm/phydm_types.h	2016-08-30 10:28:16.000000000 +0800
++++ new/rtl8812AU_linux_v5.1.5_19247.20160830/hal/phydm/phydm_types.h	2019-06-02 16:15:49.959684102 +0800
+@@ -1,4 +1,4 @@
+-/******************************************************************************
++	/******************************************************************************
+  *
+  * Copyright(c) 2007 - 2011 Realtek Corporation. All rights reserved.
+  *                                        
+@@ -222,8 +222,11 @@ typedef enum _RT_SPINLOCK_TYPE{
+ 	#elif defined (CONFIG_BIG_ENDIAN)
+ 		#define	ODM_ENDIAN_TYPE			ODM_ENDIAN_BIG
+ 	#endif
+-	
++	#if defined (LINUX_VERSION_CODE) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
++	typedef struct legacy_timer_emu		RT_TIMER, *PRT_TIMER;
++	#else
+ 	typedef struct timer_list		RT_TIMER, *PRT_TIMER;
++	#endif
+ 	typedef  void *				RT_TIMER_CALL_BACK;
+ 	#define	STA_INFO_T			struct sta_info
+ 	#define	PSTA_INFO_T		struct sta_info *
+diff -Npru old/rtl8812AU_linux_v5.1.5_19247.20160830/include/osdep_service.h new/rtl8812AU_linux_v5.1.5_19247.20160830/include/osdep_service.h
+--- old/rtl8812AU_linux_v5.1.5_19247.20160830/include/osdep_service.h	2016-08-30 10:28:16.000000000 +0800
++++ new/rtl8812AU_linux_v5.1.5_19247.20160830/include/osdep_service.h	2019-06-02 13:06:24.793387896 +0800
+@@ -20,6 +20,9 @@
+ #ifndef __OSDEP_SERVICE_H_
+ #define __OSDEP_SERVICE_H_
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
++#include <linux/sched/signal.h>
++#endif
+ 
+ #define _FAIL		0
+ #define _SUCCESS	1
+@@ -321,8 +324,12 @@ extern void rtw_init_timer(_timer *ptime
+ __inline static unsigned char _cancel_timer_ex(_timer *ptimer)
+ {
+ #ifdef PLATFORM_LINUX
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
++	return del_timer_sync(&ptimer->t);
++#else
+ 	return del_timer_sync(ptimer);
+ #endif
++#endif
+ #ifdef PLATFORM_FREEBSD
+ 	_cancel_timer(ptimer, 0);
+ 	return 0;
+diff -Npru old/rtl8812AU_linux_v5.1.5_19247.20160830/include/osdep_service_linux.h new/rtl8812AU_linux_v5.1.5_19247.20160830/include/osdep_service_linux.h
+--- old/rtl8812AU_linux_v5.1.5_19247.20160830/include/osdep_service_linux.h	2016-08-30 10:28:16.000000000 +0800
++++ new/rtl8812AU_linux_v5.1.5_19247.20160830/include/osdep_service_linux.h	2019-06-02 13:02:43.943870130 +0800
+@@ -133,7 +133,15 @@ typedef	spinlock_t	_lock;
+ #else
+ 	typedef struct semaphore	_mutex;
+ #endif
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
++       typedef struct legacy_timer_emu {
++               struct timer_list t;
++               void (*function)(unsigned long);
++               unsigned long data;
++       } _timer;
++#else
+ typedef struct timer_list _timer;
++#endif
+ 
+ struct	__queue	{
+ 	struct	list_head	queue;
+@@ -266,22 +274,42 @@ __inline static void rtw_list_delete(_li
+ 
+ #define RTW_TIMER_HDL_ARGS void *FunctionContext
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
++static void legacy_timer_emu_func(struct timer_list *t)
++{
++	struct legacy_timer_emu *lt = from_timer(lt, t, t);
++	lt->function(lt->data);
++}
++#endif
++
+ __inline static void _init_timer(_timer *ptimer, _nic_hdl nic_hdl, void *pfunc, void *cntx)
+ {
+ 	/* setup_timer(ptimer, pfunc,(u32)cntx);	 */
+ 	ptimer->function = pfunc;
+ 	ptimer->data = (unsigned long)cntx;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
++	timer_setup(&ptimer->t, legacy_timer_emu_func, 0);
++#else
+ 	init_timer(ptimer);
++#endif
+ }
+ 
+ __inline static void _set_timer(_timer *ptimer, u32 delay_time)
+ {
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
++	mod_timer(&ptimer->t, (jiffies+(delay_time*HZ/1000)));
++#else
+ 	mod_timer(ptimer , (jiffies + (delay_time * HZ / 1000)));
++#endif
+ }
+ 
+ __inline static void _cancel_timer(_timer *ptimer, u8 *bcancelled)
+ {
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
++	del_timer_sync(&ptimer->t);
++#else
+ 	del_timer_sync(ptimer);
++#endif
+ 	*bcancelled = 1;
+ }
+ 
+diff -Npru old/rtl8812AU_linux_v5.1.5_19247.20160830/Makefile new/rtl8812AU_linux_v5.1.5_19247.20160830/Makefile
+--- old/rtl8812AU_linux_v5.1.5_19247.20160830/Makefile	2016-08-30 10:28:16.000000000 +0800
++++ new/rtl8812AU_linux_v5.1.5_19247.20160830/Makefile	2019-06-02 13:23:31.856417324 +0800
+@@ -14,7 +14,7 @@ EXTRA_CFLAGS += -Wno-unused-parameter
+ EXTRA_CFLAGS += -Wno-unused-function
+ EXTRA_CFLAGS += -Wno-unused
+ #EXTRA_CFLAGS += -Wno-uninitialized
+-#EXTRA_CFLAGS += -Wno-error=date-time	# Fix compile error on gcc 4.9 and later
++EXTRA_CFLAGS += -Wno-error=date-time	# Fix compile error on gcc 4.9 and later
+ 
+ EXTRA_CFLAGS += -I$(src)/include
+ EXTRA_CFLAGS += -I$(src)/hal/phydm
+diff -Npru old/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/ioctl_cfg80211.c new/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/ioctl_cfg80211.c
+--- old/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/ioctl_cfg80211.c	2016-08-30 10:28:16.000000000 +0800
++++ new/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/ioctl_cfg80211.c	2019-06-02 15:19:29.141522048 +0800
+@@ -30,6 +30,16 @@
+ #define STATION_INFO_TX_PACKETS		BIT(NL80211_STA_INFO_TX_PACKETS)
+ #define STATION_INFO_ASSOC_REQ_IES	0
+ #endif /* Linux kernel >= 4.0.0 */
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0))
++enum ieee80211_band {
++        IEEE80211_BAND_2GHZ = NL80211_BAND_2GHZ,
++        IEEE80211_BAND_5GHZ = NL80211_BAND_5GHZ,
++        IEEE80211_BAND_60GHZ = NL80211_BAND_60GHZ,
++
++        /* keep last */
++        IEEE80211_NUM_BANDS
++};
++#endif /* Linux kernel >= 4.7.0 */
+ 
+ #include <rtw_wifi_regd.h>
+ 
+@@ -745,12 +755,28 @@ check_bss:
+ 		struct ieee80211_channel *notify_channel;
+ 		u32 freq;
+ 		u16 channel = cur_network->network.Configuration.DSConfig;
++		#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
++		struct cfg80211_roam_info roam_info = {};
++		#endif
+ 
+ 		freq = rtw_ch2freq(channel);
+ 		notify_channel = ieee80211_get_channel(wiphy, freq);
+ 		#endif
+ 
+ 		RTW_INFO(FUNC_ADPT_FMT" call cfg80211_roamed\n", FUNC_ADPT_ARG(padapter));
++		#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
++		{
++			struct cfg80211_roam_info roam_info = {
++				.channel = notify_channel,
++				.bssid = cur_network->network.MacAddress,
++				.req_ie = pmlmepriv->assoc_req+sizeof(struct rtw_ieee80211_hdr_3addr)+2,
++				.req_ie_len = pmlmepriv->assoc_req_len-sizeof(struct rtw_ieee80211_hdr_3addr)-2,
++				.resp_ie = pmlmepriv->assoc_rsp+sizeof(struct rtw_ieee80211_hdr_3addr)+6,
++				.resp_ie_len = pmlmepriv->assoc_rsp_len-sizeof(struct rtw_ieee80211_hdr_3addr)-6,
++			};
++			cfg80211_roamed(padapter->pnetdev, &roam_info, GFP_ATOMIC);
++		}
++		#else
+ 		cfg80211_roamed(padapter->pnetdev
+ 			#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 39) || defined(COMPAT_KERNEL_RELEASE)
+ 			, notify_channel
+@@ -761,6 +787,7 @@ check_bss:
+ 			, pmlmepriv->assoc_rsp + sizeof(struct rtw_ieee80211_hdr_3addr) + 6
+ 			, pmlmepriv->assoc_rsp_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 6
+ 			, GFP_ATOMIC);
++		#endif
+ 	} else {
+ 		#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0) || defined(COMPAT_KERNEL_RELEASE)
+ 		RTW_INFO("pwdev->sme_state(b)=%d\n", pwdev->sme_state);
+@@ -1730,7 +1757,10 @@ enum nl80211_iftype {
+ #endif
+ static int cfg80211_rtw_change_iface(struct wiphy *wiphy,
+ 				     struct net_device *ndev,
+-				     enum nl80211_iftype type, u32 *flags,
++				     enum nl80211_iftype type,
++					#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)
++				     	u32 *flags,
++					#endif
+ 				     struct vif_params *params)
+ {
+ 	enum nl80211_iftype old_type;
+@@ -1871,9 +1901,20 @@ void rtw_cfg80211_indicate_scan_done(_ad
+ 
+ 		/* avoid WARN_ON(request != wiphy_to_dev(request->wiphy)->scan_req); */
+ 		if (pwdev_priv->scan_request->wiphy != pwdev_priv->rtw_wdev->wiphy)
++		{
+ 			RTW_INFO("error wiphy compare\n");
++		}
+ 		else
++		{
++			#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,8,0)
++			struct cfg80211_scan_info info = {
++				.aborted = aborted
++			};
++			cfg80211_scan_done(pwdev_priv->scan_request, &info);
++			#else
+ 			cfg80211_scan_done(pwdev_priv->scan_request, aborted);
++			#endif
++		}
+ 
+ 		pwdev_priv->scan_request = NULL;
+ 	} else {
+@@ -3623,7 +3664,12 @@ static int rtw_cfg80211_add_monitor_if(_
+ 	mon_ndev->type = ARPHRD_IEEE80211_RADIOTAP;
+ 	strncpy(mon_ndev->name, name, IFNAMSIZ);
+ 	mon_ndev->name[IFNAMSIZ - 1] = 0;
++	#if (LINUX_VERSION_CODE>=KERNEL_VERSION(4,11,9))
++	mon_ndev->needs_free_netdev = false;
++	mon_ndev->priv_destructor = rtw_ndev_destructor;
++	#else
+ 	mon_ndev->destructor = rtw_ndev_destructor;
++	#endif
+ 
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29))
+ 	mon_ndev->netdev_ops = &rtw_cfg80211_monitor_if_ops;
+@@ -3689,7 +3735,11 @@ static int
+ 		#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0))
+ 		unsigned char name_assign_type,
+ 		#endif
+-		enum nl80211_iftype type, u32 *flags, struct vif_params *params)
++		enum nl80211_iftype type,
++		#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,12,0))
++		u32 *flags,
++		#endif
++		struct vif_params *params)
+ {
+ 	int ret = 0;
+ 	struct net_device *ndev = NULL;
+@@ -6167,7 +6217,11 @@ static void rtw_cfg80211_preinit_wiphy(_
+ #endif
+ 
+ #if defined(CONFIG_PM) && (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0))
++	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,12,0))
++	wiphy->max_sched_scan_reqs = 1;
++	#else
+ 	wiphy->flags |= WIPHY_FLAG_SUPPORTS_SCHED_SCAN;
++	#endif
+ #ifdef CONFIG_PNO_SUPPORT
+ 	wiphy->max_sched_scan_ssids = MAX_PNO_LIST_COUNT;
+ #endif
+diff -Npru old/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/ioctl_linux.c new/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/ioctl_linux.c
+--- old/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/ioctl_linux.c	2016-08-30 10:28:16.000000000 +0800
++++ new/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/ioctl_linux.c	2019-06-02 13:38:41.424690953 +0800
+@@ -13120,7 +13120,11 @@ static int rtw_ioctl_standard_wext_priva
+ static int rtw_ioctl_wext_private(struct net_device *dev, struct ifreq *rq)
+ {
+ #ifdef CONFIG_COMPAT
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,6,0)
++	if(in_compat_syscall())
++#else
+ 	if (is_compat_task())
++#endif
+ 		return rtw_ioctl_compat_wext_private(dev, rq);
+ 	else
+ #endif /* CONFIG_COMPAT */
+diff -Npru old/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/rtw_android.c new/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/rtw_android.c
+--- old/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/rtw_android.c	2016-08-30 10:28:16.000000000 +0800
++++ new/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/rtw_android.c	2019-06-02 16:02:10.626060746 +0800
+@@ -593,7 +593,11 @@ int rtw_android_priv_cmd(struct net_devi
+ 		goto exit;
+ 	}
+ #ifdef CONFIG_COMPAT
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,6,0)
++	if (in_compat_syscall()) {
++#else
+ 	if (is_compat_task()) {
++#endif
+ 		/* User space is 32-bit, use compat ioctl */
+ 		compat_android_wifi_priv_cmd compat_priv_cmd;
+ 
+diff -Npru old/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/wifi_regd.c new/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/wifi_regd.c
+--- old/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/wifi_regd.c	2016-08-30 10:28:16.000000000 +0800
++++ new/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/linux/wifi_regd.c	2019-06-02 15:57:36.370548134 +0800
+@@ -10,6 +10,12 @@
+ 
+ #include <rtw_wifi_regd.h>
+ 
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0))
++#define IEEE80211_BAND_2GHZ    NL80211_BAND_2GHZ
++#define IEEE80211_BAND_5GHZ    NL80211_BAND_5GHZ
++#define IEEE80211_NUM_BANDS    NUM_NL80211_BANDS
++#endif /* Linux kernel >= 4.7.0 */
++
+ static struct country_code_to_enum_rd allCountries[] = {
+ 	{COUNTRY_CODE_USER, "RD"},
+ };
+diff -Npru old/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/osdep_service.c new/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/osdep_service.c
+--- old/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/osdep_service.c	2016-08-30 10:28:16.000000000 +0800
++++ new/rtl8812AU_linux_v5.1.5_19247.20160830/os_dep/osdep_service.c	2019-06-02 17:01:04.463214814 +0800
+@@ -1910,7 +1910,6 @@ static int closeFile(struct file *fp)
+ static int readFile(struct file *fp, char *buf, int len)
+ {
+ 	int rlen = 0, sum = 0;
+-
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0))
+ 	if (!(fp->f_mode & FMODE_CAN_READ))
+ #else
+@@ -1919,7 +1918,9 @@ static int readFile(struct file *fp, cha
+ 		return -EPERM;
+ 
+ 	while (sum < len) {
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0))
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
++		rlen = kernel_read(fp, buf + sum, len - sum, &fp->f_pos);
++#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0))
+ 		rlen = __vfs_read(fp, buf + sum, len - sum, &fp->f_pos);
+ #else
+ 		rlen = fp->f_op->read(fp, buf + sum, len - sum, &fp->f_pos);
