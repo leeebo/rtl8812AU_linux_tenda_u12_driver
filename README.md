@@ -1,15 +1,11 @@
 ﻿## 步骤
-1. 下载rtl8812au-master.zip 地址https://github.com/gnab/rtl8812au
+1. git clone https://github.com/qljz1993/rtl8812AU_linux_tenda_u12_driver.git
 
-2. 解压rtl8812au-master
+2. make
 
-3. cd rtl8812au-master
+3. sudo make install
 
-4. make
-
-5. sudo make install
-
-6. sudo modprobe 8812au
+4. sudo modprobe 8812au
 
 ## 坑1
 （make）编译时提示macro "__TIME__" might prevent reproducible builds [-Werror=date-time]
@@ -32,6 +28,8 @@ install -p -m 644 8812au.ko  /lib/modules/4.4.0-161-generic/kernel/drivers/net/w
 因该是内核版本的问题，需要修改源文件，使用这位老哥的资源可以
 https://download.csdn.net/download/qq_20252351/11222555
 感谢！
+
+最新版本请参考rtl8812au-master地址https://github.com/gnab/rtl8812au
 
 
 
