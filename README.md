@@ -31,5 +31,5 @@ https://download.csdn.net/download/qq_20252351/11222555
 
 最新版本请参考rtl8812au-master地址https://github.com/gnab/rtl8812au
 
-
+ubuntu 18.04 请参考 https://askubuntu.com/questions/1076771/realtek-0bdaa811-wifi-driver-rtl8812au-on-ubuntu-18-04
 
