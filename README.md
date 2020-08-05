@@ -31,5 +31,21 @@ https://download.csdn.net/download/qq_20252351/11222555
 
 最新版本请参考rtl8812au-master地址https://github.com/gnab/rtl8812au
 
-ubuntu 18.04 请参考 https://askubuntu.com/questions/1076771/realtek-0bdaa811-wifi-driver-rtl8812au-on-ubuntu-18-04
+## ubuntu 18.04 
+
+1. 请参考 https://askubuntu.com/questions/1076771/realtek-0bdaa811-wifi-driver-rtl8812au-on-ubuntu-18-04
+2. 如果遇到 WiFi 可以被扫描到，但是需要重复输入密码的情况 （kernel >= 4.15）
+
+[bug 描述](https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1852258)
+
+[解决方案](https://askubuntu.com/questions/1149117/tp-link-ac600-archer-t2u-nano-driver-for-ubuntu-18-04/1149288#1149288)
+
+```
+sudo apt install git dkms
+git clone https://github.com/jeremyb31/rtl8812au-1.git
+cd rtl8812au-1
+sudo ./dkms-install.sh
+```
+
+安全引导将需要被禁用。github repo名称有一点误导，因为源代码支持rtl8812au、rtl8814au和rtl8821au
 
