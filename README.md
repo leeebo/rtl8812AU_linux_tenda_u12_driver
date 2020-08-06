@@ -47,5 +47,7 @@ cd rtl8812au-1
 sudo ./dkms-install.sh
 ```
 
+使用 `sudo dkms status` 可以查看是否安装成功
+
 安全引导将需要被禁用。github repo名称有一点误导，因为源代码支持rtl8812au、rtl8814au和rtl8821au
 
