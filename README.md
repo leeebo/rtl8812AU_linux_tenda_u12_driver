@@ -59,3 +59,10 @@ sudo ./dkms-install.sh
 
 安全引导将需要被禁用。github repo名称有一点误导，因为源代码支持rtl8812au、rtl8814au和rtl8821au
 
+## ubuntu 20.04 安装步骤
+
+maybe? not test
+
+```
+https://github.com/gordboy/rtl8812au-5.6.4.2
+```
