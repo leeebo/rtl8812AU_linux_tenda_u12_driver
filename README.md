@@ -61,8 +61,9 @@ sudo ./dkms-install.sh
 
 ## ubuntu 20.04 安装步骤
 
-maybe? not test
+教程（亲测可用）：https://tutorialforlinux.com/2020/01/14/step-by-step-ubuntu-20-04-realtek-rtl8812au-driver-installation-guide/
 
+下载过程请使用
 ```
-https://github.com/gordboy/rtl8812au-5.6.4.2
+git clone https://github.com/gnab/rtl8812au.git
 ```
