@@ -67,3 +67,8 @@ sudo ./dkms-install.sh
 ```
 git clone https://github.com/gnab/rtl8812au.git
 ```
+
+## Monitor mode support
+
+https://github.com/aircrack-ng/rtl8812au
+
