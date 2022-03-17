@@ -72,3 +72,7 @@ git clone https://github.com/gnab/rtl8812au.git
 
 https://github.com/aircrack-ng/rtl8812au
 
+## 支持 monitor 模式的 wifi adapter/chipset 列表
+
+https://deviwiki.com/wiki/List_of_Wireless_Adapters_That_Support_Monitor_Mode_and_Packet_Injection
+
